@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Suraksha Chakra</title>
+    <meta name="theme-color" content="#1e3a8a" id="theme-color">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        primary: { 50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 500: '#3b82f6', 600: '#2563eb', 900: '#1e3a8a' },
+                        danger: { 50: '#fef2f2', 100: '#fee2e2', 500: '#ef4444', 600: '#dc2626', 900: '#7f1d1d' }
+                    },
+                    padding: {
+                        'safe-top': 'env(safe-area-inset-top)',
+                        'safe-bottom': 'env(safe-area-inset-bottom)'
+                    },
+                    boxShadow: {
+                        'glow': '0 0 20px rgba(59, 130, 246, 0.5)',
+                        'glow-red': '0 0 30px rgba(239, 68, 68, 0.6)'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Base Resets */
+        body {
+            overscroll-behavior-y: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Sidebar Transitions */
+        #sidebar {
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            will-change: transform;
+        }
+        .sidebar-closed { transform: translateX(-100%); }
+        .sidebar-open { transform: translateX(0); }
+        
+        #sidebar-overlay {
+            transition: opacity 0.3s ease;
+        }
+
+        /* Modal Transitions */
+        .modal-transition {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .modal-open {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+        }
+        .modal-closed {
+            opacity: 0;
+            transform: scale(0.95) translateY(10px);
+            pointer-events: none;
+        }
+
+        /* Animations */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            100% { transform: scale(2.5); opacity: 0; }
+        }
+        .pulse-ring {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 2px solid rgba(239, 68, 68, 0.6);
+            box-sizing: border-box;
+            animation: pulse-ring 3s linear infinite;
+        }
+
+        @keyframes wave {
+            0%, 100% { height: 10%; }
+            50% { height: 100%; }
+        }
+        .audio-bar {
+            width: 4px;
+            background-color: white;
+            border-radius: 2px;
+            animation: wave 1s ease-in-out infinite;
+        }
+
+        /* Fade Transition for Views */
+        .view-section {
+            transition: opacity 0.2s ease-in-out;
+        }
+        .fade-out { opacity: 0; pointer-events: none; }
+        .fade-in { opacity: 1; pointer-events: auto; }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        /* Leaflet Overrides */
+        .leaflet-custom-icon {
+            background: transparent;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .leaflet-control-attribution {
+            font-size: 8px !important;
+        }
+
+    </style>
+</head>
+<body id="app-body" class="bg-gray-50 text-gray-900 h-[100dvh] flex flex-col overflow-hidden transition-colors duration-500 font-sans">
+
+    <!-- === HEADER === -->
+    <header id="main-header" class="bg-primary-900 text-white shadow-lg z-40 transition-colors duration-500 pt-safe-top">
+        <div class="px-4 py-3 flex justify-between items-center h-16">
+            <!-- Left: Menu & Brand -->
+            <div class="flex items-center gap-3">
+                <button onclick="window.toggleSidebar()" class="p-2 rounded-full hover:bg-white/10 active:scale-95 transition">
+                    <i class="fas fa-bars text-xl"></i>
+                </button>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight tracking-tight">Suraksha</h1>
+                    <div id="connection-status" class="flex items-center gap-1.5 mt-0.5 transition-all duration-300">
+                        <!-- Content managed by JS -->
+                        <span class="relative flex h-2 w-2">
+                          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                          <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                        </span>
+                        <span class="text-[10px] font-medium opacity-90 tracking-wide">ONLINE | ONDC</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right: Dynamic Badge -->
+            <div id="header-badge">
+                <!-- Peace Mode Badge -->
+                <div id="badge-peace" class="flex flex-col items-end">
+                    <span class="text-[9px] text-blue-200 uppercase font-bold tracking-wider opacity-80">Score</span>
+                    <span id="score-display-header" class="font-mono font-bold text-xl leading-none">785</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- === SIDEBAR NAVIGATION === -->
+    <!-- Overlay -->
+    <div id="sidebar-overlay" onclick="window.toggleSidebar()" class="fixed inset-0 bg-black/60 z-50 hidden opacity-0 backdrop-blur-sm"></div>
+    
+    <!-- Drawer -->
+    <aside id="sidebar" class="fixed top-0 left-0 h-full w-[80%] max-w-sm bg-white shadow-2xl z-[60] sidebar-closed flex flex-col">
+        <!-- Drawer Header -->
+        <div id="sidebar-header" class="bg-gradient-to-br from-primary-900 to-primary-600 text-white p-6 pt-safe-top transition-colors duration-500">
+            <div class="flex items-center gap-4 mb-4 cursor-pointer" onclick="App.logic.openProfile()">
+                <div class="w-14 h-14 bg-white/20 backdrop-blur rounded-full flex items-center justify-center text-xl font-bold border-2 border-white/30 shadow-inner">
+                    RP
+                </div>
+                <div>
+                    <h2 class="font-bold text-lg leading-tight">Ramesh Prasad</h2>
+                    <p class="text-xs text-blue-100">+91 98765 43210</p>
+                </div>
+            </div>
+            <div class="flex justify-between items-center">
+                <div class="bg-white/10 rounded-lg p-2 flex text-xs px-3 backdrop-blur-sm border border-white/10">
+                    <span>Kirana Merchant</span>
+                    <span class="font-bold ml-2">Verified <i class="fas fa-check-circle"></i></span>
+                </div>
+                <div id="battery-status" class="text-[10px] font-mono opacity-80">
+                    <!-- JS Injected -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Drawer Menu -->
+        <nav class="flex-1 overflow-y-auto py-2">
+            <div class="px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-widest mt-2">Account</div>
+            <a href="#" onclick="App.logic.openProfile()" class="flex items-center px-6 py-3.5 hover:bg-gray-50 text-gray-700 active:bg-gray-100 transition-colors">
+                <i class="fas fa-user w-6 text-center text-gray-400 mr-3"></i> <span class="font-medium">Profile</span>
+            </a>
+            <a href="#" onclick="App.logic.openTransactions()" class="flex items-center px-6 py-3.5 hover:bg-gray-50 text-gray-700 active:bg-gray-100 transition-colors">
+                <i class="fas fa-file-invoice w-6 text-center text-gray-400 mr-3"></i> <span class="font-medium">Transactions</span>
+            </a>
+            
+            <div class="px-4 py-2 mt-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Settings</div>
+            <a href="#" class="flex items-center px-6 py-3.5 hover:bg-gray-50 text-gray-700 active:bg-gray-100 transition-colors">
+                <i class="fas fa-language w-6 text-center text-gray-400 mr-3"></i> <span class="font-medium">Language (English)</span>
+            </a>
+            
+            <!-- Disaster Toggle -->
+            <div class="mx-4 mt-6 p-4 bg-red-50 rounded-xl border border-red-100 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h4 class="font-bold text-red-800 text-sm">Disaster Simulation</h4>
+                        <p class="text-[10px] text-red-600 mt-0.5">Toggle Emergency Mode</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="sim-toggle" class="sr-only peer" onchange="window.toggleDisasterMode(this)">
+                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600 shadow-inner"></div>
+                    </label>
+                </div>
+            </div>
+        </nav>
+
+        <div class="p-4 border-t border-gray-100 pb-safe-bottom">
+            <button onclick="App.logic.logout()" class="w-full py-3 text-center text-gray-500 font-medium text-sm hover:text-gray-800 hover:bg-gray-50 rounded-xl transition-colors">Log Out</button>
+        </div>
+    </aside>
+
+    <!-- === MAIN CONTENT === -->
+    <main class="flex-1 overflow-y-auto hide-scrollbar relative bg-gray-50 transition-colors duration-500" id="main-container">
+        
+        <!-- 1. PEACE VIEW -->
+        <div id="view-peace" class="p-4 space-y-6 pb-32 view-section fade-in">
+            
+            <!-- Score Card -->
+            <div class="bg-white rounded-2xl p-5 shadow-lg shadow-gray-200/50 border border-gray-100 relative overflow-hidden transform transition hover:scale-[1.01]">
+                <div class="absolute top-0 right-0 w-32 h-32 bg-primary-50 rounded-bl-[100px] -mr-8 -mt-8 z-0"></div>
+                <div class="relative z-10">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wide">Suraksha Score</h3>
+                            <div class="flex items-end gap-2 mt-1">
+                                <span id="score-display-card" class="text-4xl font-black text-primary-900 tracking-tight">785</span>
+                                <span class="text-sm text-gray-500 mb-1 font-medium">/ 800</span>
+                            </div>
+                        </div>
+                        <div class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold shadow-sm">
+                            Excellent
+                        </div>
+                    </div>
+                    
+                    <div class="w-full bg-gray-100 rounded-full h-2.5 mb-3 overflow-hidden">
+                        <div id="score-bar" class="bg-gradient-to-r from-primary-500 to-green-500 h-2.5 rounded-full shadow-[0_0_10px_rgba(34,197,94,0.4)] transition-all duration-1000 ease-out" style="width: 85%"></div>
+                    </div>
+                    
+                    <div class="flex items-center gap-2 text-xs text-gray-600 bg-primary-50 p-2 rounded-lg border border-primary-100">
+                        <i class="fas fa-gift text-primary-600"></i>
+                        <span>Eligible for <strong>₹2L Low-Interest Loan</strong></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Features Grid -->
+            <div>
+                <h3 class="text-sm font-bold text-gray-800 mb-4 px-1 flex items-center gap-2">
+                    Business Tools <span class="text-[10px] bg-gray-200 px-1.5 rounded text-gray-600 font-normal">4 Available</span>
+                </h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <!-- Smart Khata -->
+                    <button onclick="App.logic.openSmartKhata()" class="group bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center gap-3 active:scale-[0.96] transition duration-200 hover:shadow-md hover:border-blue-100">
+                        <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center text-xl group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300 shadow-sm">
+                            <i class="fas fa-book"></i>
+                        </div>
+                        <div class="text-center">
+                            <div class="font-bold text-sm text-gray-800 group-hover:text-blue-700 transition-colors">Smart Khata</div>
+                            <div id="khata-total-display" class="text-[10px] text-gray-400 mt-0.5 font-medium">₹4,200 due</div>
+                        </div>
+                    </button>
+
+                    <!-- Mandi Connect -->
+                    <button onclick="App.logic.updateMandi(); App.logic.openMandiDetails()" class="group bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center gap-3 active:scale-[0.96] transition duration-200 hover:shadow-md hover:border-green-100">
+                        <div class="w-12 h-12 bg-green-50 text-green-600 rounded-xl flex items-center justify-center text-xl group-hover:bg-green-600 group-hover:text-white transition-colors duration-300 shadow-sm">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <div class="text-center">
+                            <div class="font-bold text-sm text-gray-800 group-hover:text-green-700 transition-colors">Mandi Rates</div>
+                            <div class="text-[10px] text-green-600 mt-0.5 font-bold animate-pulse">● Live Updates</div>
+                        </div>
+                    </button>
+
+                    <!-- Digital Twin -->
+                    <button onclick="App.logic.openStockScan()" class="group bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center gap-3 active:scale-[0.96] transition duration-200 hover:shadow-md hover:border-purple-100">
+                        <div class="w-12 h-12 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center text-xl group-hover:bg-purple-600 group-hover:text-white transition-colors duration-300 shadow-sm">
+                            <i class="fas fa-cube"></i>
+                        </div>
+                        <div class="text-center">
+                            <div class="font-bold text-sm text-gray-800 group-hover:text-purple-700 transition-colors">Stock Scan</div>
+                            <div class="text-[10px] text-gray-400 mt-0.5 font-medium">Update Twin</div>
+                        </div>
+                    </button>
+
+                    <!-- Family ID -->
+                    <button onclick="App.logic.openFamilyID()" class="group bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center gap-3 active:scale-[0.96] transition duration-200 hover:shadow-md hover:border-orange-100">
+                        <div class="w-12 h-12 bg-orange-50 text-orange-600 rounded-xl flex items-center justify-center text-xl group-hover:bg-orange-600 group-hover:text-white transition-colors duration-300 shadow-sm">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="text-center">
+                            <div class="font-bold text-sm text-gray-800 group-hover:text-orange-700 transition-colors">Family ID</div>
+                            <div class="text-[10px] text-gray-400 mt-0.5 font-medium">Safe Profile</div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Community Section (Added as per request) -->
+            <div>
+                <h3 class="text-sm font-bold text-gray-800 mb-4 px-1 mt-2">Community</h3>
+                <button onclick="App.logic.openKhoyaPaya()" class="w-full bg-yellow-50 p-4 rounded-2xl shadow-sm border border-yellow-100 flex items-center gap-4 active:scale-[0.98] transition">
+                    <div class="w-12 h-12 bg-yellow-100 text-yellow-600 rounded-xl flex items-center justify-center text-xl">
+                        <i class="fas fa-search"></i>
+                    </div>
+                    <div class="text-left flex-1">
+                        <div class="font-bold text-sm text-gray-800">Khoya Paya</div>
+                        <div class="text-[10px] text-gray-500 mt-0.5">Find missing persons in your area</div>
+                    </div>
+                    <i class="fas fa-chevron-right text-yellow-300"></i>
+                </button>
+            </div>
+
+            <!-- Market Ticker Widget -->
+            <div id="market-widget" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 transform transition hover:shadow-md">
+                <!-- Content injected via JS -->
+            </div>
+        </div>
+
+        <!-- 2. WAR VIEW (Hidden) -->
+        <div id="view-war" class="hidden absolute inset-0 flex flex-col justify-between pb-32 pt-20 px-6 z-10 fade-out h-full">
+            <!-- Radar Background -->
+            <div class="absolute inset-0 flex items-center justify-center overflow-hidden pointer-events-none opacity-30">
+                <div class="pulse-ring" style="width: 200px; height: 200px; animation-delay: 0s;"></div>
+                <div class="pulse-ring" style="width: 350px; height: 350px; animation-delay: 1.2s;"></div>
+                <div class="pulse-ring" style="width: 500px; height: 500px; animation-delay: 2.4s;"></div>
+            </div>
+
+            <!-- Top Section -->
+            <div class="text-center z-20 mt-4">
+                <div class="inline-flex items-center gap-2 bg-red-900/40 border border-red-500/30 px-5 py-2 rounded-full backdrop-blur-md shadow-lg shadow-red-900/20">
+                    <span class="relative flex h-3 w-3">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                    </span>
+                    <span class="text-xs font-bold text-red-100 tracking-wider">EMERGENCY PROTOCOL</span>
+                </div>
+            </div>
+
+            <!-- Middle Section: SOS Button -->
+            <div class="flex-1 flex flex-col items-center justify-center z-30">
+                <button id="sos-btn"
+                    class="relative w-56 h-56 rounded-full bg-gradient-to-br from-red-600 to-red-800 shadow-glow-red border-[6px] border-red-500/30 flex flex-col items-center justify-center active:scale-95 transition-transform duration-200 group overflow-hidden">
+                    
+                    <!-- Inner glow/pulse -->
+                    <div class="absolute inset-0 rounded-full bg-red-500/20 animate-pulse"></div>
+                    <div class="absolute inset-0 rounded-full bg-gradient-to-t from-black/20 to-transparent"></div>
+                    
+                    <!-- Ripple effect on active -->
+                    <div class="absolute inset-0 rounded-full bg-red-400 opacity-0 group-active:opacity-30 animate-ping"></div>
+                    
+                    <i class="fas fa-microphone text-6xl text-white mb-3 drop-shadow-md z-10"></i>
+                    <span class="text-4xl font-black text-white tracking-widest drop-shadow-sm z-10">SOS</span>
+                    <span class="text-[10px] text-red-100 uppercase tracking-widest mt-2 font-bold bg-red-900/30 px-3 py-1 rounded-full z-10 border border-red-500/20">Hold 3s</span>
+                </button>
+
+                <p id="sos-instruction" class="text-gray-300/80 text-sm mt-8 text-center max-w-[200px] font-medium leading-relaxed drop-shadow-sm">
+                    AI Voice Triage Active.<br>Speak clearly to alert Mesh.
+                </p>
+            </div>
+
+            <!-- Bottom Section: Offline Tools -->
+            <div class="grid grid-cols-2 gap-4 w-full z-20 mb-4">
+                <button onclick="App.logic.openKhoyaPaya()" class="glass p-4 rounded-xl flex items-center justify-center gap-3 active:bg-white/10 transition group border border-white/10 hover:border-yellow-500/50">
+                    <div class="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center group-hover:bg-yellow-500/30 transition">
+                        <i class="fas fa-search text-yellow-400"></i>
+                    </div>
+                    <div class="text-left">
+                        <p class="text-white text-xs font-bold">Khoya Paya</p>
+                        <p class="text-[9px] text-gray-400">Offline Search</p>
+                    </div>
+                </button>
+                <button class="glass p-4 rounded-xl flex items-center justify-center gap-3 active:bg-white/10 transition group border border-white/10 hover:border-green-500/50">
+                    <div class="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center group-hover:bg-green-500/30 transition">
+                        <i class="fas fa-medkit text-green-400"></i>
+                    </div>
+                    <div class="text-left">
+                        <p class="text-white text-xs font-bold">First Aid</p>
+                        <p class="text-[9px] text-gray-400">Audio Guide</p>
+                    </div>
+                </button>
+            </div>
+        </div>
+
+        <!-- 3. RECOVER VIEW (Hidden) -->
+        <div id="view-recover" class="hidden p-4 space-y-6 pb-32 fade-out">
+            <div id="recovery-dashboard" class="space-y-6">
+                <!-- Content injected via JS -->
+            </div>
+        </div>
+
+    </main>
+
+    <!-- === BOTTOM NAVIGATION === -->
+    <nav class="fixed bottom-0 w-full bg-white border-t border-gray-200 pb-safe-bottom z-50 transition-colors duration-500" id="bottom-nav">
+        <div class="flex justify-around items-center h-16">
+            <button onclick="window.switchTab('peace')" class="nav-item flex-1 flex flex-col items-center justify-center h-full text-primary-600 active:scale-95 transition" data-target="peace">
+                <i class="fas fa-home text-xl mb-1 transition-colors"></i>
+                <span class="text-[10px] font-medium">Home</span>
+            </button>
+            <button onclick="window.switchTab('war')" class="nav-item flex-1 flex flex-col items-center justify-center h-full text-gray-400 active:scale-95 transition" data-target="war">
+                <i class="fas fa-shield-alt text-xl mb-1 transition-colors"></i>
+                <span class="text-[10px] font-medium">Alerts</span>
+            </button>
+            <button onclick="window.switchTab('recover')" class="nav-item flex-1 flex flex-col items-center justify-center h-full text-gray-400 active:scale-95 transition" data-target="recover">
+                <i class="fas fa-hand-holding-medical text-xl mb-1 transition-colors"></i>
+                <span class="text-[10px] font-medium">Recover</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- === MODALS & OVERLAYS === -->
+    
+    <!-- Generic Modal -->
+    <div id="modal-overlay" class="fixed inset-0 bg-black/60 z-[90] hidden opacity-0 transition-opacity duration-300 backdrop-blur-sm" onclick="App.ui.closeModal()"></div>
+    <div id="data-modal" class="fixed bottom-0 left-0 right-0 md:top-1/2 md:left-1/2 md:bottom-auto md:w-[90%] md:max-w-md md:-translate-x-1/2 md:-translate-y-1/2 bg-white rounded-t-2xl md:rounded-2xl shadow-2xl z-[100] p-6 modal-closed modal-transition max-h-[85vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-5 sticky top-0 bg-white z-10 pb-2 border-b border-gray-50">
+            <h3 id="modal-title" class="text-lg font-bold text-gray-900">Details</h3>
+            <button onclick="App.ui.closeModal()" class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div id="modal-content" class="pb-safe-bottom">
+            <!-- Dynamic Content -->
+        </div>
+    </div>
+
+    <!-- Voice Triage Overlay -->
+    <div id="voice-overlay" class="fixed inset-0 bg-gray-900/95 z-[70] hidden flex flex-col items-center justify-center text-white backdrop-blur-md transition-opacity duration-300">
+        <div class="flex gap-1.5 mb-10 h-10 items-end">
+            <div class="audio-bar" style="animation-delay: 0s"></div>
+            <div class="audio-bar" style="animation-delay: 0.2s"></div>
+            <div class="audio-bar" style="animation-delay: 0.4s"></div>
+            <div class="audio-bar" style="animation-delay: 0.1s"></div>
+            <div class="audio-bar" style="animation-delay: 0.3s"></div>
+        </div>
+        
+        <p class="text-gray-400 text-xs uppercase tracking-widest font-bold mb-4">Processing Voice Stream</p>
+        <p id="transcript" class="text-xl font-medium text-center px-8 h-20 leading-relaxed italic text-white/90">"..."</p>
+        
+        <div id="ai-verdict" class="mt-4 opacity-0 transform transition-all duration-500 min-w-[240px]">
+            <!-- AI Analysis Result -->
+        </div>
+
+        <button onclick="App.ui.closeOverlay()" class="absolute bottom-10 bg-white/10 border border-white/20 px-8 py-3 rounded-full text-sm font-bold hover:bg-white/20 transition active:scale-95">
+            Cancel
+        </button>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-24 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-5 py-3 rounded-full text-xs font-medium shadow-xl opacity-0 transition-all duration-300 pointer-events-none z-[80] translate-y-[-10px] flex items-center gap-2 border border-gray-700">
+        <i class="fas fa-info-circle"></i>
+        <span id="toast-msg">Notification</span>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        const App = {
+            runtime: {
+                mapInstance: null
+            },
+            storage: {
+                save: () => {
+                    localStorage.setItem('surakshaState', JSON.stringify(App.state));
+                },
+                load: () => {
+                    const saved = localStorage.getItem('surakshaState');
+                    if (saved) {
+                        const parsed = JSON.parse(saved);
+                        App.state = { ...App.state, ...parsed };
+                    }
+                }
+            },
+            state: {
+                user: {
+                    name: "Ramesh Prasad",
+                    shop: "Kirana Merchant",
+                    phone: "+91 98765 43210",
+                    address: "12/B, Station Road, Khardaha, WB",
+                    kyc: true
+                },
+                mode: 'peace',
+                score: 785,
+                meshNodes: 12,
+                
+                // DATA STORE
+                mandiData: [
+                    { name: 'Rice (Basmati)', price: 6200, trend: 'down', change: '1.2%' },
+                    { name: 'Sugar (M-30)', price: 3850, trend: 'up', change: '0.8%' },
+                    { name: 'Mustard Oil', price: 145, trend: 'neutral', change: '0.0%' },
+                    { name: 'Wheat (Sharbati)', price: 2900, trend: 'up', change: '2.1%' }
+                ],
+                khata: [
+                    { name: "Raju Gupta", amount: 450, type: "credit", date: "Today, 10:30 AM" },
+                    { name: "Supplier Payment", amount: 2000, type: "debit", date: "Yesterday" },
+                    { name: "Mrs. Sharma", amount: 120, type: "credit", date: "24 Oct" },
+                    { name: "Tea Stall", amount: 50, type: "debit", date: "24 Oct" }
+                ],
+                transactions: [
+                    { id: "TXN8829", desc: "Mandi Purchase", amount: 15000, date: "25 Oct", status: "Success" },
+                    { id: "TXN8830", desc: "ULI Loan Repayment", amount: 2000, date: "20 Oct", status: "Success" },
+                    { id: "TXN8831", desc: "Customer UPI", amount: 450, date: "20 Oct", status: "Received" }
+                ],
+                inventory: [
+                    { item: "Basmati Rice", qty: "50 kg", status: "Good", color: "green" },
+                    { item: "Mustard Oil", qty: "20 L", status: "Low", color: "red" },
+                    { item: "Masoor Dal", qty: "10 kg", status: "Good", color: "green" },
+                    { item: "Atta Packet", qty: "25 pcs", status: "Medium", color: "yellow" }
+                ],
+                family: {
+                    head: "Ramesh Prasad",
+                    members: [
+                        { name: "Suman Prasad", relation: "Wife", age: 42 },
+                        { name: "Rahul Prasad", relation: "Son", age: 12 },
+                        { name: "Priya Prasad", relation: "Daughter", age: 15 }
+                    ],
+                    id: "SC-WB-8829-11"
+                },
+                recovery: {
+                    damage: 85000,
+                    loanApproved: false,
+                    mitraAssigned: false
+                },
+                // Added Missing Persons Data
+                missingPersons: [
+                    { name: "Amit Kumar", age: 12, lastSeen: "Station Road", time: "2 hrs ago", status: "Missing", image: "child", desc: "Blue shirt, school bag" },
+                    { name: "Meena Devi", age: 65, lastSeen: "Market Area", time: "5 hrs ago", status: "Sighted", image: "elder", desc: "Red Saree, glasses" }
+                ]
+            },
+
+            logic: {
+                init: () => {
+                    App.storage.load();
+                    App.ui.renderMandiWidget();
+                    App.ui.renderRecoverView();
+                    App.logic.checkBattery();
+                    App.logic.setupSOSListener();
+                    
+                    // Initialize Map after rendering view
+                    setTimeout(() => App.logic.initMap(), 500);
+
+                    // Restore mode if was in war
+                    if (App.state.mode === 'war') {
+                        document.getElementById('sim-toggle').checked = true;
+                        App.logic.toggleMode(true);
+                    }
+                    
+                    // Update total khata
+                    App.logic.updateKhataTotal();
+                },
+
+                initMap: () => {
+                    const mapContainer = document.getElementById('cow-map');
+                    if (!mapContainer) return;
+
+                    // Clean up existing map instance if it exists
+                    if (App.runtime.mapInstance) {
+                        App.runtime.mapInstance.remove();
+                        App.runtime.mapInstance = null;
+                    }
+
+                    const mapTilerApiKey = '1SR3j7iqeNxq2IDsVqvd';
+                    const USER_LOCATION = [22.5593194, 88.3967222]; // Specific Loc from TrackPeek (Khardaha area)
+                    const MITRA_OFFSET = [22.5610, 88.3980]; // Slightly offset for simulation
+
+                    const map = L.map('cow-map', {
+                        center: USER_LOCATION,
+                        zoom: 15,
+                        zoomControl: false, // Cleaner UI for mobile widget
+                        attributionControl: false
+                    });
+
+                    // Add attribution manually in a smaller font via CSS if needed, or stick to bottom right default
+                    L.control.attribution({position: 'bottomright'}).addAttribution('&copy; MapTiler &copy; OSM').addTo(map);
+
+                    const tileUrl = `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${mapTilerApiKey}`;
+                    L.tileLayer(tileUrl, {
+                        maxZoom: 19,
+                    }).addTo(map);
+
+                    // User Marker Icon
+                    const createIcon = (color) => {
+                        const svgIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="${color}" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>`;
+                        return L.divIcon({
+                            html: svgIcon,
+                            className: 'leaflet-custom-icon',
+                            iconSize: [24, 24],
+                            iconAnchor: [12, 24],
+                            popupAnchor: [0, -24]
+                        });
+                    };
+
+                    // Add User Marker
+                    L.marker(USER_LOCATION, {icon: createIcon('#3b82f6')}).addTo(map).bindPopup("You (Home)");
+
+                    // If Mitra is assigned, add marker and fit bounds
+                    if (App.state.recovery.mitraAssigned) {
+                        const mitraMarker = L.marker(MITRA_OFFSET, {icon: createIcon('#16a34a')}).addTo(map).bindPopup("Mitra (Arriving)");
+                        
+                        // Draw a simple line
+                        L.polyline([USER_LOCATION, MITRA_OFFSET], {color: '#16a34a', weight: 2, dashArray: '5, 5'}).addTo(map);
+                        
+                        const group = new L.featureGroup([
+                            L.marker(USER_LOCATION),
+                            mitraMarker
+                        ]);
+                        map.fitBounds(group.getBounds().pad(0.2));
+                    }
+
+                    App.runtime.mapInstance = map;
+                },
+
+                updateKhataTotal: () => {
+                    const total = App.state.khata
+                        .filter(t => t.type === 'credit')
+                        .reduce((sum, t) => sum + t.amount, 0);
+                    const el = document.getElementById('khata-total-display');
+                    if (el) el.innerText = `₹${total.toLocaleString()} due`;
+                },
+
+                toggleMode: (isWar) => {
+                    App.state.mode = isWar ? 'war' : 'peace';
+                    App.storage.save();
+                    App.ui.applyTheme(App.state.mode);
+                    App.ui.switchTab(App.state.mode);
+                    
+                    if(isWar) {
+                        App.ui.showToast("⚠️ GRID FAILURE DETECTED. SWITCHING TO MESH.", true);
+                        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+                    } else {
+                        App.ui.showToast("System Restored. Online.");
+                    }
+                },
+
+                // --- Sidebar Actions ---
+                openProfile: () => {
+                    const content = `
+                        <div class="text-center mb-6">
+                            <div class="w-20 h-20 bg-primary-100 text-primary-600 rounded-full flex items-center justify-center text-3xl font-bold mx-auto mb-3 border-4 border-white shadow-md">RP</div>
+                            <h2 class="font-bold text-xl">${App.state.user.name}</h2>
+                            <p class="text-gray-500 text-sm">${App.state.user.shop}</p>
+                        </div>
+                        <div class="space-y-3">
+                            <div class="flex justify-between p-3 bg-gray-50 rounded-lg">
+                                <span class="text-gray-500 text-sm">Phone</span>
+                                <span class="font-medium text-sm">${App.state.user.phone}</span>
+                            </div>
+                            <div class="flex justify-between p-3 bg-gray-50 rounded-lg">
+                                <span class="text-gray-500 text-sm">Address</span>
+                                <span class="font-medium text-sm text-right max-w-[60%]">${App.state.user.address}</span>
+                            </div>
+                            <div class="flex justify-between p-3 bg-gray-50 rounded-lg items-center">
+                                <span class="text-gray-500 text-sm">KYC Status</span>
+                                <span class="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold">Verified</span>
+                            </div>
+                        </div>
+                        <button class="w-full mt-6 border border-red-200 text-red-600 py-3 rounded-xl font-medium active:bg-red-50" onclick="App.logic.logout()">Log Out</button>
+                    `;
+                    App.ui.openModal("My Profile", content);
+                    App.ui.toggleSidebar(); // Close sidebar
+                },
+
+                openTransactions: () => {
+                    const content = `
+                        <div class="space-y-3">
+                            ${App.state.transactions.map(t => `
+                                <div class="flex justify-between items-center border-b border-gray-50 pb-3">
+                                    <div>
+                                        <p class="font-bold text-sm text-gray-800">${t.desc}</p>
+                                        <p class="text-xs text-gray-400">ID: ${t.id} • ${t.date}</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="font-bold text-sm ${t.status === 'Received' ? 'text-green-600' : 'text-gray-800'}">₹${t.amount}</p>
+                                        <p class="text-[10px] text-green-600 bg-green-50 px-1.5 py-0.5 rounded inline-block mt-1">${t.status}</p>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                    App.ui.openModal("Transaction History", content);
+                    App.ui.toggleSidebar();
+                },
+
+                logout: () => {
+                    App.ui.toggleSidebar();
+                    App.ui.showToast("Logging out...", false);
+                    localStorage.removeItem('surakshaState');
+                    setTimeout(() => {
+                        document.body.innerHTML = `
+                            <div class="h-screen flex flex-col items-center justify-center bg-primary-900 text-white p-6">
+                                <div class="w-20 h-20 bg-white/10 rounded-full flex items-center justify-center mb-6 text-3xl font-bold animate-bounce shadow-glow">SC</div>
+                                <h1 class="text-3xl font-bold mb-2">Suraksha Chakra</h1>
+                                <p class="text-primary-200 mb-8 text-center text-sm">Session Ended. Please refresh to login.</p>
+                                <button onclick="location.reload()" class="bg-white text-primary-900 px-8 py-3 rounded-full font-bold shadow-lg active:scale-95 transition hover:bg-primary-50">Login Again</button>
+                            </div>
+                        `;
+                    }, 1000);
+                },
+
+                // --- Peace Mode Actions ---
+                addKhataEntry: () => {
+                    // Simple prompt based addition logic for now to keep it lightweight
+                    // In a real app, this would be a form inside the modal
+                    const name = prompt("Customer Name:");
+                    if (!name) return;
+                    const amount = parseInt(prompt("Amount (₹):"));
+                    if (!amount || isNaN(amount)) return;
+                    
+                    const newEntry = {
+                        name: name,
+                        amount: amount,
+                        type: 'credit',
+                        date: 'Just now'
+                    };
+                    
+                    App.state.khata.unshift(newEntry);
+                    App.storage.save();
+                    App.logic.updateKhataTotal();
+                    App.logic.openSmartKhata(); // Re-render modal
+                    App.ui.showToast("Entry Added");
+                },
+
+                openSmartKhata: () => {
+                    const total = App.state.khata.filter(t => t.type === 'credit').reduce((a,b)=>a+b.amount,0);
+                    const content = `
+                        <div class="space-y-4">
+                            <div class="bg-blue-50 p-4 rounded-xl flex justify-between items-center border border-blue-100">
+                                <div><p class="text-xs text-gray-500">Total Credit Given</p><p class="font-bold text-xl text-blue-700">₹${total.toLocaleString()}</p></div>
+                                <button onclick="App.logic.addKhataEntry()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 transition shadow-sm active:scale-95">+ Add</button>
+                            </div>
+                            <div class="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                                ${App.state.khata.map(t => `
+                                    <div class="flex justify-between items-center border-b border-gray-50 pb-2">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-8 h-8 rounded-full ${t.type === 'credit' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'} flex items-center justify-center text-xs">
+                                                <i class="fas ${t.type === 'credit' ? 'fa-arrow-up' : 'fa-arrow-down'}"></i>
+                                            </div>
+                                            <div><p class="text-sm font-bold text-gray-800">${t.name}</p><p class="text-[10px] text-gray-400">${t.date}</p></div>
+                                        </div>
+                                        <span class="font-mono font-bold text-sm ${t.type === 'credit' ? 'text-red-600' : 'text-green-600'}">₹${t.amount}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                    App.ui.openModal("Smart Khata", content);
+                },
+
+                refreshMandiRates: () => {
+                    App.ui.showToast("Fetching latest rates...", false);
+                    setTimeout(() => {
+                        // Simulate randomness
+                        App.state.mandiData = App.state.mandiData.map(item => {
+                            const change = (Math.random() * 5 - 2.5); // Random change between -2.5% and +2.5%
+                            const newPrice = Math.round(item.price * (1 + change / 100));
+                            return {
+                                ...item,
+                                price: newPrice,
+                                trend: change > 0 ? 'up' : 'down',
+                                change: Math.abs(change).toFixed(1) + '%'
+                            };
+                        });
+                        App.ui.renderMandiWidget();
+                        App.logic.openMandiDetails(); // Re-render modal
+                        App.ui.showToast("Rates Updated!");
+                    }, 1000);
+                },
+
+                openMandiDetails: () => {
+                    const content = `
+                        <div class="space-y-4">
+                            <p class="text-xs text-gray-500 mb-2">Live rates from Khardaha Mandi (ONDC)</p>
+                            <div class="space-y-3">
+                                ${App.state.mandiData.map(item => {
+                                    const trendColor = item.trend === 'up' ? 'text-green-500' : (item.trend === 'down' ? 'text-red-500' : 'text-gray-400');
+                                    const arrow = item.trend === 'up' ? '▲' : (item.trend === 'down' ? '▼' : '−');
+                                    const bgClass = item.trend === 'up' ? 'bg-green-50' : (item.trend === 'down' ? 'bg-red-50' : 'bg-gray-50');
+                                    return `
+                                    <div class="flex justify-between items-center p-3 ${bgClass} rounded-xl border border-gray-100">
+                                        <span class="text-sm font-bold text-gray-700">${item.name}</span>
+                                        <div class="text-right">
+                                            <p class="font-mono font-bold text-gray-900">₹${item.price}</p>
+                                            <p class="text-[10px] ${trendColor} font-bold">${arrow} ${item.change}</p>
+                                        </div>
+                                    </div>`;
+                                }).join('')}
+                            </div>
+                            <button onclick="App.logic.refreshMandiRates()" class="w-full mt-4 bg-gray-900 text-white py-3 rounded-xl text-sm font-bold active:scale-95 transition shadow-lg hover:bg-gray-800">Refresh Rates</button>
+                        </div>
+                    `;
+                    App.ui.openModal("Mandi Rates", content);
+                },
+
+                openStockScan: () => {
+                    const content = `
+                        <div class="space-y-4">
+                            <div class="bg-gray-900 h-48 rounded-xl flex flex-col items-center justify-center text-white relative overflow-hidden group cursor-pointer transition transform active:scale-95" onclick="App.logic.scanInventory(); App.ui.closeModal()">
+                                <i class="fas fa-camera text-3xl mb-2 group-hover:scale-110 transition duration-300"></i>
+                                <p class="text-xs font-medium">Tap to Scan Shelves</p>
+                                <div class="absolute inset-0 border-2 border-green-400 opacity-30 m-4 rounded-lg animate-pulse"></div>
+                                <div class="absolute bottom-0 w-full h-1 bg-green-500/50"></div>
+                            </div>
+                            <h4 class="font-bold text-sm text-gray-700 mt-2 flex justify-between items-center">
+                                Current Stock (Digital Twin)
+                                <span class="text-[10px] font-normal text-gray-400">Last synced: Just now</span>
+                            </h4>
+                            <div class="space-y-2">
+                                ${App.state.inventory.map(i => `
+                                    <div class="flex justify-between items-center text-sm p-2 bg-white border border-gray-100 rounded-lg hover:shadow-sm transition">
+                                        <span class="font-medium text-gray-700">${i.item}</span>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-gray-500 text-xs font-mono">${i.qty}</span>
+                                            <span class="w-2.5 h-2.5 rounded-full bg-${i.color}-500 shadow-sm"></span>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                    App.ui.openModal("Stock Scanner", content);
+                },
+
+                openFamilyID: () => {
+                    const content = `
+                        <div class="space-y-5 text-center">
+                            <div class="bg-gradient-to-br from-orange-500 to-orange-600 text-white p-5 rounded-2xl shadow-lg shadow-orange-500/30 relative overflow-hidden">
+                                <div class="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-bl-full -mr-4 -mt-4"></div>
+                                <div class="flex justify-between items-start mb-4">
+                                    <h3 class="font-bold text-lg text-left leading-tight">Family<br>Resilience Card</h3>
+                                    <i class="fas fa-shield-alt text-orange-200 text-2xl"></i>
+                                </div>
+                                <div class="bg-white p-3 rounded-xl mb-4 shadow-inner inline-block">
+                                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${App.state.family.id}" class="w-32 h-32" alt="QR Code">
+                                </div>
+                                <p class="font-mono text-sm tracking-widest opacity-90 font-bold">${App.state.family.id}</p>
+                            </div>
+                            
+                            <div class="text-left space-y-2">
+                                <h4 class="font-bold text-sm text-gray-700">Registered Members</h4>
+                                ${App.state.family.members.map(m => `
+                                    <div class="flex justify-between text-sm bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                                        <span class="font-medium text-gray-800">${m.name}</span>
+                                        <span class="text-gray-500 text-xs bg-white px-2 py-0.5 rounded border border-gray-200">${m.relation} (${m.age})</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                    App.ui.openModal("Family Identity", content);
+                },
+
+                // --- War Mode Actions ---
+                openKhoyaPaya: () => {
+                    const content = `
+                        <div class="text-center py-6">
+                            <div class="w-20 h-20 bg-yellow-50 rounded-full flex items-center justify-center mx-auto mb-6 relative">
+                                <span class="absolute inset-0 rounded-full bg-yellow-400 opacity-20 animate-ping"></span>
+                                <i class="fas fa-search text-yellow-500 text-3xl"></i>
+                            </div>
+                            <h3 class="font-bold text-gray-800 text-lg">Khoya Paya Network</h3>
+                            <p class="text-xs text-gray-500 mt-2 px-4">Local community reporting & finding.</p>
+                            
+                            <div class="mt-6 flex gap-2 justify-center">
+                                <button onclick="App.ui.showToast('Feature simulated')" class="bg-yellow-500 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-yellow-600 transition shadow-sm">Report Missing</button>
+                                <button onclick="App.ui.showToast('Feature simulated')" class="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-xs font-bold hover:bg-gray-200 transition">View All</button>
+                            </div>
+
+                            <div class="mt-8 space-y-3 text-left">
+                                <p class="text-xs font-bold text-gray-400 uppercase tracking-wider flex justify-between">
+                                    <span>Recent Reports</span>
+                                    <span class="text-yellow-600">3 Active</span>
+                                </p>
+                                <div class="space-y-3">
+                                    ${App.state.missingPersons.map(p => `
+                                        <div class="bg-white p-3 rounded-lg border border-gray-100 shadow-sm flex items-start gap-3">
+                                            <div class="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
+                                                <i class="fas fa-user text-gray-400"></i>
+                                            </div>
+                                            <div class="flex-1">
+                                                <div class="flex justify-between">
+                                                    <p class="text-sm font-bold text-gray-800">${p.name}</p>
+                                                    <span class="text-[10px] font-bold ${p.status === 'Missing' ? 'text-red-500 bg-red-50' : 'text-green-500 bg-green-50'} px-2 py-0.5 rounded-full border ${p.status === 'Missing' ? 'border-red-100' : 'border-green-100'}">${p.status}</span>
+                                                </div>
+                                                <p class="text-xs text-gray-500 mt-0.5">${p.desc}</p>
+                                                <div class="flex items-center gap-2 mt-2 text-[10px] text-gray-400">
+                                                    <i class="fas fa-map-marker-alt"></i> ${p.lastSeen} • ${p.time}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    App.ui.openModal("Khoya Paya Search", content);
+                },
+
+                // --- Recover Actions ---
+                claimLoan: () => {
+                    if(App.state.recovery.loanApproved) return;
+                    App.state.recovery.loanApproved = true;
+                    App.storage.save();
+                    App.ui.showToast("Submitting E-Panchnama...");
+                    setTimeout(() => {
+                        App.ui.showToast("ULI Loan Approved: ₹50,000", false);
+                        App.ui.renderRecoverView(); // Update UI to show loan approved state
+                        setTimeout(() => App.logic.initMap(), 100); // Re-init map
+                    }, 2000);
+                },
+
+                trackStock: () => {
+                    const content = `
+                        <div class="space-y-4">
+                            <div class="flex items-center gap-3 bg-green-50 p-4 rounded-xl border border-green-100 shadow-sm">
+                                <div class="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600">
+                                    <i class="fas fa-check"></i>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-bold text-green-800">Order Confirmed</p>
+                                    <p class="text-[10px] text-green-600 font-medium">Credit Approved by HUL</p>
+                                </div>
+                            </div>
+                            <div class="relative pl-6 border-l-2 border-gray-200 space-y-8 my-6 ml-2">
+                                <div class="relative group">
+                                    <div class="absolute -left-[31px] top-0 w-4 h-4 bg-green-500 rounded-full border-4 border-white shadow-sm group-hover:scale-110 transition"></div>
+                                    <p class="text-xs font-bold text-gray-800">Dispatched</p>
+                                    <p class="text-[10px] text-gray-500">Warehouse, Kolkata • 10:00 AM</p>
+                                </div>
+                                <div class="relative group">
+                                    <div class="absolute -left-[31px] top-0 w-4 h-4 bg-gray-300 rounded-full border-4 border-white shadow-sm"></div>
+                                    <p class="text-xs font-bold text-gray-400">In Transit</p>
+                                    <p class="text-[10px] text-gray-400">Expected 4:00 PM</p>
+                                </div>
+                                <div class="relative group">
+                                    <div class="absolute -left-[31px] top-0 w-4 h-4 bg-gray-300 rounded-full border-4 border-white shadow-sm"></div>
+                                    <p class="text-xs font-bold text-gray-400">Delivered</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    App.ui.openModal("Inventory Shipment", content);
+                },
+
+                // --- Helper Functions ---
+                scanInventory: () => {
+                    if (App.state.mode === 'war') {
+                        App.ui.showToast("Feature unavailable in Offline Mode", true);
+                        return;
+                    }
+                    App.ui.showToast("Syncing Inventory Twin...");
+                    
+                    // Simulate randomized update
+                    setTimeout(() => {
+                        App.state.inventory = App.state.inventory.map(i => {
+                             if(Math.random() > 0.7) {
+                                return {...i, status: i.status === 'Good' ? 'Low' : 'Good', color: i.status === 'Good' ? 'red' : 'green'};
+                             }
+                             return i;
+                        });
+                        
+                        App.state.score = Math.min(800, App.state.score + 5);
+                        App.storage.save();
+                        
+                        document.getElementById('score-display-card').innerText = App.state.score;
+                        document.getElementById('score-display-header').innerText = App.state.score;
+                        document.getElementById('score-bar').style.width = `${(App.state.score/800)*100}%`;
+                        App.ui.showToast(`Score Updated: ${App.state.score}`, false);
+                    }, 1000);
+                },
+
+                updateMandi: () => {
+                    App.ui.showToast("Syncing ONDC Data...", false);
+                    setTimeout(() => {
+                        App.ui.showToast("Prices Updated!", false);
+                    }, 1200);
+                },
+
+                checkBattery: async () => {
+                    const statusEl = document.getElementById('battery-status');
+                    if ('getBattery' in navigator) {
+                        try {
+                            const battery = await navigator.getBattery();
+                            const updateBattery = () => {
+                                statusEl.innerHTML = `Battery: <span class="${battery.level < 0.2 ? 'text-red-500' : 'text-green-400'} font-bold">${Math.round(battery.level * 100)}%</span>`;
+                            };
+                            updateBattery();
+                            battery.addEventListener('levelchange', updateBattery);
+                        } catch (e) {
+                            statusEl.innerText = "Battery: Unknown";
+                        }
+                    } else {
+                        // Better simulation
+                        statusEl.innerHTML = `Battery: <span class="text-green-400 font-bold">85%</span>`;
+                    }
+                },
+
+                setupSOSListener: () => {
+                    const btn = document.getElementById('sos-btn');
+                    let pressTimer;
+                    const instruction = document.getElementById('sos-instruction');
+
+                    const start = (e) => {
+                        e.preventDefault();
+                        instruction.innerHTML = "Listening...";
+                        instruction.className = "text-red-300 font-bold text-sm mt-8 text-center max-w-xs z-20 animate-pulse";
+                        
+                        pressTimer = setTimeout(() => {
+                            App.ui.openOverlay();
+                            const transcript = document.getElementById('transcript');
+                            const verdict = document.getElementById('ai-verdict');
+                            
+                            transcript.innerText = "...";
+                            verdict.innerHTML = "";
+                            verdict.classList.add('opacity-0');
+
+                            // Simulate AI processing sequence
+                            setTimeout(() => { transcript.innerText = '"Jol... amar gola porjonto..."'; }, 1000);
+                            setTimeout(() => { transcript.innerText = '"Water is up to my neck..."'; }, 2000);
+                            setTimeout(() => { 
+                                verdict.innerHTML = `
+                                    <div class="bg-red-500/20 border border-red-500/50 rounded-2xl p-5 text-center backdrop-blur-md shadow-glow-red">
+                                        <p class="text-xs text-red-300 font-bold uppercase mb-1 tracking-widest">AI Analysis Complete</p>
+                                        <p class="text-4xl font-black text-white mb-2 tracking-tight">CRITICAL</p>
+                                        <div class="inline-block bg-red-600 px-3 py-1 rounded text-[10px] font-bold text-white tracking-wide uppercase">Routing Priority: High</div>
+                                    </div>
+                                `;
+                                verdict.classList.remove('opacity-0');
+                                if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 500]);
+                            }, 3000);
+                        }, 800);
+                    };
+                    
+                    const end = () => {
+                        clearTimeout(pressTimer);
+                        instruction.innerHTML = "AI Voice Triage Active.<br>Speak clearly to alert Mesh.";
+                        instruction.className = "text-gray-300/80 text-sm mt-8 text-center max-w-[200px] font-medium leading-relaxed drop-shadow-sm";
+                    };
+
+                    btn.addEventListener('mousedown', start);
+                    btn.addEventListener('mouseup', end);
+                    btn.addEventListener('mouseleave', end);
+                    
+                    btn.addEventListener('touchstart', start, {passive: false});
+                    btn.addEventListener('touchend', end);
+                },
+
+                requestCash: () => {
+                    const btn = document.getElementById('req-cash-btn');
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin animate-spin"></i> Searching ONDC...';
+                    btn.classList.add('opacity-75', 'cursor-not-allowed');
+                    
+                    setTimeout(() => {
+                        App.state.recovery.mitraAssigned = true;
+                        App.storage.save();
+                        App.ui.renderRecoverView(); 
+                        setTimeout(() => App.logic.initMap(), 100); // Re-init map after DOM update
+                        App.ui.showToast("Mitra Assigned! ETA: 12m");
+                    }, 2000);
+                }
+            },
+
+            ui: {
+                toggleSidebar: () => {
+                    const sb = document.getElementById('sidebar');
+                    const ov = document.getElementById('sidebar-overlay');
+                    const isOpen = sb.classList.contains('sidebar-open');
+                    
+                    if (isOpen) {
+                        sb.classList.remove('sidebar-open');
+                        sb.classList.add('sidebar-closed');
+                        ov.classList.remove('opacity-100');
+                        setTimeout(() => ov.classList.add('hidden'), 300);
+                    } else {
+                        sb.classList.remove('sidebar-closed');
+                        sb.classList.add('sidebar-open');
+                        ov.classList.remove('hidden');
+                        setTimeout(() => ov.classList.add('opacity-100'), 10);
+                    }
+                },
+
+                switchTab: (tabId) => {
+                    ['peace', 'war', 'recover'].forEach(id => {
+                        const el = document.getElementById(`view-${id}`);
+                        el.classList.add('hidden', 'fade-out');
+                        el.classList.remove('fade-in');
+                    });
+                    
+                    const target = document.getElementById(`view-${tabId}`);
+                    target.classList.remove('hidden');
+                    requestAnimationFrame(() => {
+                        target.classList.remove('fade-out');
+                        target.classList.add('fade-in');
+                    });
+
+                    document.querySelectorAll('.nav-item').forEach(btn => {
+                        const activeColor = App.state.mode === 'war' ? 'text-red-500' : 'text-primary-600';
+                        if (btn.dataset.target === tabId) {
+                            btn.className = `nav-item flex-1 flex flex-col items-center justify-center h-full ${activeColor} font-bold transition-colors`;
+                        } else {
+                            btn.className = `nav-item flex-1 flex flex-col items-center justify-center h-full text-gray-400 transition-colors`;
+                        }
+                    });
+                },
+
+                applyTheme: (mode) => {
+                    const body = document.getElementById('app-body');
+                    const header = document.getElementById('main-header');
+                    const nav = document.getElementById('bottom-nav');
+                    const status = document.getElementById('connection-status');
+                    const headerBadge = document.getElementById('header-badge');
+                    const sidebarHeader = document.getElementById('sidebar-header');
+
+                    if (mode === 'war') {
+                        body.className = "bg-gray-900 text-white h-[100dvh] flex flex-col overflow-hidden transition-colors duration-500 font-sans";
+                        header.className = "bg-danger-900 text-white shadow-lg z-40 transition-colors duration-500 pt-safe-top border-b border-red-800";
+                        nav.className = "fixed bottom-0 w-full bg-gray-900 border-t border-gray-800 pb-safe-bottom z-50 transition-colors duration-500";
+                        sidebarHeader.className = "bg-gradient-to-br from-red-900 to-red-600 text-white p-6 pt-safe-top transition-colors duration-500";
+                        
+                        status.innerHTML = `<span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span></span><span class="text-[10px] font-medium opacity-90 tracking-wide text-red-100">OFFLINE | MESH</span>`;
+                        
+                        headerBadge.innerHTML = `<div class="flex flex-col items-end"><span class="text-[9px] text-red-200 uppercase font-bold tracking-wider opacity-80">Mesh Nodes</span><span class="font-mono font-bold text-xl leading-none">${App.state.meshNodes}</span></div>`;
+                    
+                    } else {
+                        body.className = "bg-gray-50 text-gray-900 h-[100dvh] flex flex-col overflow-hidden transition-colors duration-500 font-sans";
+                        header.className = "bg-primary-900 text-white shadow-lg z-40 transition-colors duration-500 pt-safe-top";
+                        nav.className = "fixed bottom-0 w-full bg-white border-t border-gray-200 pb-safe-bottom z-50 transition-colors duration-500";
+                        sidebarHeader.className = "bg-gradient-to-br from-primary-900 to-primary-600 text-white p-6 pt-safe-top transition-colors duration-500";
+                        
+                        status.innerHTML = `<span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span></span><span class="text-[10px] font-medium opacity-90 tracking-wide">ONLINE | ONDC</span>`;
+                        
+                        headerBadge.innerHTML = `<div class="flex flex-col items-end"><span class="text-[9px] text-blue-200 uppercase font-bold tracking-wider opacity-80">Score</span><span class="font-mono font-bold text-xl leading-none" id="score-display-header">${App.state.score}</span></div>`;
+                    }
+                },
+
+                renderMandiWidget: () => {
+                    const widget = document.getElementById('market-widget');
+                    let html = `<div class="flex justify-between items-center mb-3 pb-2 border-b border-gray-50"><span class="text-xs font-bold text-gray-500 uppercase tracking-wide">Khardaha Mandi</span><span class="text-[10px] text-gray-400 font-medium">Live</span></div><div class="space-y-3">`;
+                    
+                    App.state.mandiData.forEach(item => {
+                        const trendColor = item.trend === 'up' ? 'text-green-500' : (item.trend === 'down' ? 'text-red-500' : 'text-gray-400');
+                        const arrow = item.trend === 'up' ? '▲' : (item.trend === 'down' ? '▼' : '−');
+                        html += `
+                            <div class="flex justify-between items-center group cursor-default">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 text-xs group-hover:bg-primary-50 group-hover:text-primary-600 transition">📦</div>
+                                    <div><p class="text-sm font-bold text-gray-800">${item.name}</p><p class="text-[10px] text-gray-400">/ Unit</p></div>
+                                </div>
+                                <div class="text-right"><p class="font-mono font-bold text-gray-800">₹${item.price}</p><p class="text-[10px] ${trendColor} font-medium">${arrow} ${item.change}</p></div>
+                            </div>`;
+                    });
+                    html += `</div>`;
+                    widget.innerHTML = html;
+                },
+
+                renderRecoverView: () => {
+                    const container = document.getElementById('recovery-dashboard');
+                    const mitraBlock = App.state.recovery.mitraAssigned ? `
+                        <div class="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center justify-between animate-pulse">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-700 font-bold text-xs">RS</div>
+                                <div><p class="text-xs font-bold text-gray-800">Raju Singh</p><p class="text-[10px] text-gray-500">Bank Mitra • 4.8★</p></div>
+                            </div>
+                            <div class="text-right"><p class="text-lg font-bold text-primary-600">12m</p><p class="text-[10px] text-gray-400">ETA</p></div>
+                        </div>
+                    ` : `
+                        <button id="req-cash-btn" onclick="App.logic.requestCash()" class="w-full bg-primary-900 text-white py-3 rounded-xl font-bold text-sm shadow-md hover:bg-primary-800 transition active:scale-[0.98] flex justify-center items-center gap-2">
+                            <span>Request ₹2,000 Cash</span>
+                            <i class="fas fa-arrow-right text-xs"></i>
+                        </button>
+                    `;
+
+                    // Handle loan button state
+                    const loanBtnState = App.state.recovery.loanApproved 
+                        ? 'bg-green-600 text-white cursor-default' 
+                        : 'bg-primary-600 text-white hover:bg-primary-700 active:scale-95 shadow';
+                    
+                    const loanBtnText = App.state.recovery.loanApproved ? 'Approved <i class="fas fa-check ml-1"></i>' : 'Claim Loan';
+
+                    container.innerHTML = `
+                        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                            <div class="bg-green-50 p-4 border-b border-green-100 flex justify-between items-center">
+                                <span class="font-bold text-green-800 text-sm">E-Panchnama Verified</span>
+                                <i class="fas fa-check-circle text-green-600"></i>
+                            </div>
+                            <div class="p-5">
+                                <div class="flex justify-between text-sm mb-4">
+                                    <span class="text-gray-500">Damage Assessed</span>
+                                    <span class="font-bold text-gray-900">₹${App.state.recovery.damage.toLocaleString()}</span>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button onclick="App.logic.claimLoan()" class="flex-1 py-2 rounded-lg text-xs font-bold transition ${loanBtnState}">${loanBtnText}</button>
+                                    <button class="flex-1 bg-white border border-gray-300 text-gray-700 py-2 rounded-lg text-xs font-bold hover:bg-gray-50">Details</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                            <div class="p-4 border-b border-gray-100"><h3 class="font-bold text-gray-800 text-sm">Cash-on-Wheels</h3></div>
+                            <!-- Map Container -->
+                            <div id="cow-map" class="h-40 bg-gray-100 w-full z-0 relative"></div>
+                            
+                            <div class="p-4 bg-white relative z-10 border-t border-gray-100">${mitraBlock}</div>
+                        </div>
+                        
+                        <!-- Inventory Credit -->
+                        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                             <div class="p-4 border-b border-gray-100"><h3 class="font-bold text-gray-800 text-sm">Stock Replacement</h3></div>
+                             <div class="p-4">
+                                <button onclick="App.logic.trackStock()" class="w-full flex items-center p-3 bg-orange-50 rounded-xl border border-orange-100 active:bg-orange-100 transition group hover:shadow-md">
+                                    <div class="w-10 h-10 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center mr-3 shrink-0 group-hover:scale-110 transition">
+                                        <i class="fas fa-box-open"></i>
+                                    </div>
+                                    <div class="flex-1 text-left">
+                                        <div class="font-bold text-xs text-gray-800">Inventory Credit</div>
+                                        <div class="text-[10px] text-gray-500">HUL Distributor - In Transit</div>
+                                    </div>
+                                    <i class="fas fa-chevron-right text-gray-300 text-xs group-hover:translate-x-1 transition"></i>
+                                </button>
+                             </div>
+                        </div>
+                    `;
+                },
+
+                // Modal Logic
+                openModal: (title, content) => {
+                    const overlay = document.getElementById('modal-overlay');
+                    const modal = document.getElementById('data-modal');
+                    const titleEl = document.getElementById('modal-title');
+                    const contentEl = document.getElementById('modal-content');
+
+                    titleEl.innerText = title;
+                    contentEl.innerHTML = content;
+
+                    overlay.classList.remove('hidden');
+                    modal.classList.remove('modal-closed');
+                    
+                    // Trigger reflow for transition
+                    setTimeout(() => {
+                        overlay.classList.remove('opacity-0');
+                        modal.classList.add('modal-open');
+                    }, 10);
+                },
+
+                closeModal: () => {
+                    const overlay = document.getElementById('modal-overlay');
+                    const modal = document.getElementById('data-modal');
+
+                    overlay.classList.add('opacity-0');
+                    modal.classList.remove('modal-open');
+                    modal.classList.add('modal-closed');
+
+                    setTimeout(() => {
+                        overlay.classList.add('hidden');
+                    }, 300);
+                },
+
+                openOverlay: () => {
+                    const ov = document.getElementById('voice-overlay');
+                    ov.classList.remove('hidden');
+                    setTimeout(() => ov.classList.remove('opacity-0'), 10);
+                },
+
+                closeOverlay: () => {
+                    const ov = document.getElementById('voice-overlay');
+                    ov.classList.add('opacity-0');
+                    setTimeout(() => ov.classList.add('hidden'), 300);
+                },
+
+                showToast: (text, isAlert = false) => {
+                    const toast = document.getElementById('toast');
+                    const msg = document.getElementById('toast-msg');
+                    msg.innerText = text;
+                    toast.className = `fixed top-24 left-1/2 -translate-x-1/2 px-5 py-3 rounded-full text-xs font-medium shadow-xl transition-all duration-300 pointer-events-none z-[80] translate-y-[-10px] flex items-center gap-2 border ${isAlert ? 'bg-red-600 border-red-500 text-white' : 'bg-gray-800 border-gray-700 text-white'}`;
+                    requestAnimationFrame(() => {
+                        toast.classList.remove('opacity-0', 'translate-y-[-10px]');
+                        toast.classList.add('opacity-100', 'translate-y-0');
+                    });
+                    setTimeout(() => {
+                        toast.classList.remove('opacity-100', 'translate-y-0');
+                        toast.classList.add('opacity-0', 'translate-y-[-10px]');
+                    }, 2500);
+                }
+            }
+        };
+
+        // Window Globals for HTML onclick triggers
+        window.toggleSidebar = App.ui.toggleSidebar;
+        window.switchTab = App.ui.switchTab;
+        window.toggleDisasterMode = (checkbox) => App.logic.toggleMode(checkbox.checked);
+
+        document.addEventListener('DOMContentLoaded', App.logic.init);
+    </script>
+</body>
+</html>
